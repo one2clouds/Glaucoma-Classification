@@ -38,6 +38,8 @@ def get_needed_metrics(labels, predicted):
 
 def train(model, train_loader, val_loader, loss_func, optimizer, num_epochs):
     best_val_recall = -100
+    best_val_loss = 1000
+    best_val_acc = -100
     for epoch in range(num_epochs):
         model.train()
         acc_train_epoch, precision_train_epoch, recall_train_epoch, f1_train_epoch  = [], [], [], []
@@ -98,8 +100,28 @@ def train(model, train_loader, val_loader, loss_func, optimizer, num_epochs):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'train_loss': train_loss,
-                }, 'model_best.pth')
-            print(f"Best model saved, Recall - {torch.tensor(recall_val_epoch).mean()} ")
+                }, 'model_best_val_recall.pth')
+            print(f"Best recall model saved, Recall - {torch.tensor(recall_val_epoch).mean()} ")
+
+        if val_loss.item() < best_val_loss:
+            best_val_loss = val_loss.item()
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_loss': train_loss,
+                }, 'model_least_val_loss.pth')
+            print(f"Best val loss model saved, val_loss - {val_loss.item()} ")
+
+        if torch.tensor(acc_val_epoch).mean() > best_val_acc:
+            best_val_acc = torch.tensor(acc_val_epoch).mean()
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_loss': train_loss,
+                }, 'model_best_val_accuracy.pth')
+            print(f"Best val acc model saved, val_acc - {torch.tensor(acc_val_epoch).mean()} ")
         
         torch.save({
             'epoch': epoch,
@@ -114,42 +136,51 @@ def train(model, train_loader, val_loader, loss_func, optimizer, num_epochs):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--train_path', type=str, required=True)
-    parser.add_argument('--val_path', type=str, required=True)
-    parser.add_argument('--test_path', type=str, required=True)
+    parser.add_argument('--data', type=str, required=True)
+    parser.add_argument('--model', type=str, required=True)
     args = parser.parse_args()
 
-    # train_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/train/'
-    # val_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/validation/'
-    # test_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/test/'
+     # EyePACS-AIROGS
+    if args.data == 'eyepacs_airogs':
+        train_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/train/'
+        val_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/validation/'
+    elif args.data == 'dristi_gs1':
+        train_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_Drishti-GS/Drishti-GS1-processed/Train/'
+        val_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_Drishti-GS/Drishti-GS1-processed/Test/'
+    else:
+        print("data not found")
+        exit()
+    
+    data_imbalance_check(train_path)
+    train_dataloader = get_data(train_path, args.data, get_path=False, shuffle=True)
+    val_dataloader = get_data(val_path, args.data, get_path=False, shuffle=True)
 
-    data_imbalance_check(args.train_path, args.val_path, args.test_path)
-
-
-    train_dataloader = get_data(args.train_path, get_path=False, shuffle=True)
-    val_dataloader = get_data(args.val_path, get_path=False, shuffle=True)
-
-    root=pathlib.Path(args.train_path)
+    root=pathlib.Path(train_path)
     classes=sorted([j.name.split('/')[-1] for j in root.iterdir()])
 
 
-    model = EfficientNet.from_pretrained('efficientnet-b4')
-    model._fc = nn.Linear(1792, len(classes)) 
+    if args.model == 'efficient_net':
+        model = EfficientNet.from_pretrained('efficientnet-b4')
+        model._fc = nn.Linear(1792, len(classes)) 
+    elif args.model == 'resnet':
+        model = torchvision.models.resnet50(pretrained=True)
+        model.fc = nn.Linear(model.fc.in_features, len(classes))
+    else:
+        print('model not found')
+        exit()
+
     model = model.to(device)
     loss_func = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=1e-4)
-    num_epochs = 100
+    num_epochs = 60
 
     model, optimizer, epoch, train_loss = train(model, train_dataloader, val_dataloader, loss_func, optimizer, num_epochs)
 
     
 
 
-# python3 train.py --train_path '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/train/' --val_path '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/validation/' --test_path '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/test/'
-
-
-
-
+# python3 train.py --data eyepacs_airogs --model efficient_net
+# python3 train.py --data eyepacs_airogs --model resnet
 
 
 

@@ -47,6 +47,11 @@ def test(test_loader, loaded_model, ):
             inputs, labels = inputs.to(device), labels.to(device)
             outputs = nn.Sigmoid()(loaded_model(inputs)) 
             _, predicted_test = torch.max(outputs, 1)
+
+            # print(outputs)
+
+            # print(labels)
+            # print(predicted_test)
             
             acc_batch_test, precision_batch_test, recall_batch_test, f1_batch_test = get_needed_metrics(labels.cpu().detach().tolist(), predicted_test.cpu().detach().tolist())
         
@@ -73,23 +78,37 @@ def test(test_loader, loaded_model, ):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--test_path', type=str, required=True)
+    parser.add_argument('--data', type=str, required=True)
+    parser.add_argument('--model', type=str, required=True)
+
     args = parser.parse_args()
 
-    # test_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/test/'
-
-    test_dataloader = get_data(args.test_path, get_path=True, shuffle=True)
-
-    root=pathlib.Path(args.test_path)
+    if args.data == 'eyepacs_airogs':
+        test_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/test/'
+    elif args.data == 'dristi_gs1':
+        test_path = '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_Drishti-GS/Drishti-GS1_processed_train_test_overall/'
+    else: 
+        print("data is not given")
+        exit()
+    
+    test_dataloader = get_data(test_path, args.data, get_path=True, shuffle=True)
+    root=pathlib.Path(test_path)
     classes=sorted([j.name.split('/')[-1] for j in root.iterdir()])
 
-    loaded_model = EfficientNet.from_pretrained('efficientnet-b4')
-    loaded_model._fc = nn.Linear(1792, len(classes))
+    
+    if args.model == 'efficient_net':
+        loaded_model = EfficientNet.from_pretrained('efficientnet-b4')
+        loaded_model._fc = nn.Linear(1792, len(classes))
+        checkpoint = torch.load('/home/shirshak/Glaucoma_Efficientnet_simple/model_least_val_loss.pth', weights_only=True)
+    elif args.model == 'resnet':
+        loaded_model = torchvision.models.resnet50(pretrained=True)
+        loaded_model.fc = nn.Linear(loaded_model.fc.in_features, len(classes))
+        print("More code needed !! checkpoint need to be added for resnet model")
+        exit()
+    
     loaded_model = loaded_model.to(device)
-
     loaded_optimizer = optim.Adam(loaded_model.parameters(), lr=1e-4)
 
-    checkpoint = torch.load('/home/shirshak/Glaucoma_Efficientnet_simple/model_recent.pth', weights_only=True)
     loaded_model.load_state_dict(checkpoint['model_state_dict'])
     loaded_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     epoch = checkpoint['epoch']
@@ -102,7 +121,7 @@ if __name__ == "__main__":
     cm_display = ConfusionMatrixDisplay(confusion_matrix = confusion_matrix_chart, display_labels = ['Not Glaucoma', 'Glaucoma'])
     
     cm_display.plot()
-    plt.savefig('confusion_matrix.png', dpi=300)
+    plt.savefig('confusion_matrix_my_my.png', dpi=500)
     plt.close()
 
     x_image = list(torch.unbind(x_image, dim=0))
@@ -152,4 +171,5 @@ if __name__ == "__main__":
 
 
 
-# python3 test.py --test_path '/mnt/Enterprise2/shirshak/Glaucoma_Dataset_eyepacs_airogs_lightv2/eyepac-light-v2-512-jpg/test/'
+# python3 test.py --data eyepacs_airogs --model efficient_net
+# python3 test.py --data dristi_gs1
