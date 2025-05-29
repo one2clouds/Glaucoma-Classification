@@ -46,7 +46,7 @@ def train(model, train_loader, val_loader, loss_func, optimizer, num_epochs):
         for inputs, labels in tqdm(train_loader, desc=f'Training Epoch {epoch}/{num_epochs}', unit='batch'):
             inputs, labels = inputs.to(device), labels.to(device)
             optimizer.zero_grad()
-            outputs = nn.Sigmoid()(model(inputs))     
+            outputs = model(inputs)    
             
             train_loss = loss_func(outputs, labels)
             train_loss.backward()
@@ -68,7 +68,7 @@ def train(model, train_loader, val_loader, loss_func, optimizer, num_epochs):
         with torch.no_grad():
             for inputs, labels in tqdm(val_loader, desc=f'Testing {epoch}/{num_epochs}', unit='batch'):
                 inputs, labels = inputs.to(device), labels.to(device)
-                outputs = nn.Sigmoid()(model(inputs))     
+                outputs = model(inputs)  
                 val_loss = loss_func(outputs, labels)
                 _, predicted_val = torch.max(outputs, 1)
 
